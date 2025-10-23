@@ -26,13 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { RefreshCw, Download, ExternalLink, LogOut, CheckCircle2, XCircle } from 'lucide-react';
+import { RefreshCw, Download, ExternalLink, LogOut, CheckCircle2, XCircle, Home } from 'lucide-react';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 
 const REPO_URL = 'https://github.com/SimplifyJobs/Summer2026-Internships';
+const SOFTWARE_ENGINEERING_CATEGORY = 'Software Engineering';
 
-export default function JobTracker() {
+export default function SoftwareEngineeringJobs() {
   const [user, setUser] = useState<User | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [appliedJobs, setAppliedJobs] = useState<Map<string, string>>(new Map()); // job_id -> applied_at
@@ -42,7 +43,6 @@ export default function JobTracker() {
   const [showNotSuitable, setShowNotSuitable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
@@ -186,7 +186,9 @@ export default function JobTracker() {
   };
 
   const handleExport = () => {
-    exportAppliedJobs(jobs);
+    // Export only Software Engineering applied jobs
+    const seJobs = jobs.filter(job => job.category === SOFTWARE_ENGINEERING_CATEGORY);
+    exportAppliedJobs(seJobs);
   };
 
   const handleAuth = async (email: string, password: string, isSignUp: boolean) => {
@@ -207,8 +209,12 @@ export default function JobTracker() {
     setNotSuitableCount(0);
   };
 
+  // Filter jobs to only show Software Engineering jobs
   const filteredJobs = useMemo(() => {
     return jobs.filter(job => {
+      // Only show Software Engineering jobs
+      if (job.category !== SOFTWARE_ENGINEERING_CATEGORY) return false;
+      
       // Hide applied jobs from main list
       if (job.applied) return false;
       
@@ -220,11 +226,9 @@ export default function JobTracker() {
         job.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
         job.location.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesCategory = categoryFilter === 'all' || job.category === categoryFilter;
-      
-      return matchesSearch && matchesCategory;
+      return matchesSearch;
     });
-  }, [jobs, searchTerm, categoryFilter, showNotSuitable]);
+  }, [jobs, searchTerm, showNotSuitable]);
 
   // Paginated jobs
   const paginatedJobs = useMemo(() => {
@@ -238,21 +242,21 @@ export default function JobTracker() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, showNotSuitable]);
-
-  const categories = useMemo(() => {
-    const cats = new Set(jobs.map(job => job.category));
-    return Array.from(cats).sort();
-  }, [jobs]);
+  }, [searchTerm, showNotSuitable]);
 
   const stats = useMemo(() => {
+    // Calculate stats for Software Engineering jobs only
+    const seJobs = jobs.filter(job => job.category === SOFTWARE_ENGINEERING_CATEGORY);
+    const seApplied = seJobs.filter(job => job.applied).length;
+    const seNotSuitable = seJobs.filter(job => job.notSuitable).length;
+    
     return {
-      total: jobs.length,
-      applied: appliedCount,
-      notSuitable: notSuitableCount,
-      remaining: jobs.length - appliedCount - notSuitableCount,
+      total: seJobs.length,
+      applied: seApplied,
+      notSuitable: seNotSuitable,
+      remaining: seJobs.length - seApplied - seNotSuitable,
     };
-  }, [jobs.length, appliedCount, notSuitableCount]);
+  }, [jobs]);
 
   if (!user) {
     return <AuthForm onAuth={handleAuth} />;
@@ -273,9 +277,9 @@ export default function JobTracker() {
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8 flex justify-between items-start">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Summer 2026 Internship Tracker</h1>
+          <h1 className="text-4xl font-bold mb-2">💻 Software Engineering Internships</h1>
           <p className="text-muted-foreground">
-            Track your applications from {' '}
+            Track Software Engineering applications from {' '}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
               SimplifyJobs/Summer2026-Internships
               <ExternalLink className="w-3 h-3" />
@@ -286,15 +290,16 @@ export default function JobTracker() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/software-engineering">
+          <Link href="/">
             <Button variant="outline" size="sm">
-              💻 SWE Jobs
+              <Home className="w-4 h-4 mr-2" />
+              All Jobs
             </Button>
           </Link>
           <Link href="/applied">
             <Button variant="outline" size="sm">
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Applied Jobs ({stats.applied})
+              Applied Jobs ({appliedCount})
             </Button>
           </Link>
           <Button onClick={handleLogout} variant="outline" size="sm">
@@ -307,7 +312,7 @@ export default function JobTracker() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Jobs</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total SWE Jobs</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -342,7 +347,7 @@ export default function JobTracker() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Search and filter job listings</CardDescription>
+          <CardDescription>Search and filter Software Engineering job listings</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">
@@ -353,17 +358,6 @@ export default function JobTracker() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="flex-1"
               />
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full md:w-[250px]">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <div className="flex gap-2">
                 <Button 
                   onClick={loadJobs} 
@@ -401,7 +395,7 @@ export default function JobTracker() {
                 htmlFor="show-not-suitable" 
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
-                Show jobs marked as not suitable ({notSuitableCount})
+                Show jobs marked as not suitable ({stats.notSuitable})
               </label>
             </div>
           </div>
@@ -419,14 +413,13 @@ export default function JobTracker() {
                   <TableHead className="w-[200px]">Company</TableHead>
                   <TableHead className="w-[250px]">Role</TableHead>
                   <TableHead className="w-[180px]">Location</TableHead>
-                  <TableHead className="w-[120px]">Category</TableHead>
                   <TableHead className="w-[80px]">Age</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {jobs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center gap-4">
                         <p className="text-lg font-medium">No jobs in database</p>
                         <p className="text-sm text-muted-foreground">Click the "Sync" button above to load jobs from GitHub</p>
@@ -439,8 +432,8 @@ export default function JobTracker() {
                   </TableRow>
                 ) : filteredJobs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No jobs found matching your filters. Try adjusting your search or category filter.
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No Software Engineering jobs found matching your filters. Try adjusting your search.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -478,11 +471,6 @@ export default function JobTracker() {
                       <TableCell className="font-medium">{job.company}</TableCell>
                       <TableCell>{job.role}</TableCell>
                       <TableCell>{job.location}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="whitespace-nowrap">
-                          {job.category}
-                        </Badge>
-                      </TableCell>
                       <TableCell>{job.age}</TableCell>
                     </TableRow>
                   ))
@@ -562,3 +550,4 @@ export default function JobTracker() {
     </div>
   );
 }
+
