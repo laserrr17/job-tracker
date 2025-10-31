@@ -209,9 +209,9 @@ export default function SoftwareEngineeringJobs() {
     setNotSuitableCount(0);
   };
 
-  // Filter jobs to only show Software Engineering jobs
+  // Filter jobs to only show Software Engineering jobs and sort by age ascending
   const filteredJobs = useMemo(() => {
-    return jobs.filter(job => {
+    const filtered = jobs.filter(job => {
       // Only show Software Engineering jobs
       if (job.category !== SOFTWARE_ENGINEERING_CATEGORY) return false;
       
@@ -227,6 +227,20 @@ export default function SoftwareEngineeringJobs() {
         job.location.toLowerCase().includes(searchTerm.toLowerCase());
       
       return matchesSearch;
+    });
+
+    // Sort by age in ascending order
+    return filtered.sort((a, b) => {
+      // Helper function to extract numeric age value
+      const getAgeValue = (age: string): number => {
+        if (age === 'N/A' || age === '🔒') {
+          return Infinity; // Put N/A and 🔒 at the end
+        }
+        const match = age.match(/(\d+)d/);
+        return match ? parseInt(match[1], 10) : Infinity;
+      };
+
+      return getAgeValue(a.age) - getAgeValue(b.age);
     });
   }, [jobs, searchTerm, showNotSuitable]);
 
