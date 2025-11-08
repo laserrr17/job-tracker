@@ -39,7 +39,6 @@ export default function JobTracker() {
   const [notSuitableJobs, setNotSuitableJobs] = useState<Set<string>>(new Set());
   const [appliedCount, setAppliedCount] = useState(0);
   const [notSuitableCount, setNotSuitableCount] = useState(0);
-  const [showNotSuitable, setShowNotSuitable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -77,12 +76,31 @@ export default function JobTracker() {
       console.log(`Loaded: ${jobsList.length} jobs, ${appliedCnt} applied, ${notSuitableCnt} not suitable`);
       
       // Merge applied status and timestamp
-      const jobsWithStatus = jobsList.map(job => ({
-        ...job,
-        applied: applied.has(job.id),
-        appliedAt: applied.get(job.id),
-        notSuitable: notSuitable.has(job.id),
-      }));
+      // Check both by job_id and by application_url to handle cases where job_id changes
+      const jobsWithStatus = jobsList.map(job => {
+        const appliedById = applied.has(job.id);
+        const appliedByUrl = job.applicationUrl && job.applicationUrl.trim() !== '' 
+          ? applied.has(`url:${job.applicationUrl.trim()}`) 
+          : false;
+        const isApplied = appliedById || appliedByUrl;
+        const appliedAt = applied.get(job.id) || (job.applicationUrl && job.applicationUrl.trim() !== '' 
+          ? applied.get(`url:${job.applicationUrl.trim()}`) 
+          : undefined);
+        
+        // Check not suitable by both job_id and application_url
+        const notSuitableById = notSuitable.has(job.id);
+        const notSuitableByUrl = job.applicationUrl && job.applicationUrl.trim() !== '' 
+          ? notSuitable.has(`url:${job.applicationUrl.trim()}`) 
+          : false;
+        const isNotSuitable = notSuitableById || notSuitableByUrl;
+        
+        return {
+          ...job,
+          applied: isApplied,
+          appliedAt: appliedAt,
+          notSuitable: isNotSuitable,
+        };
+      });
       
       setJobs(jobsWithStatus);
       setAppliedJobs(applied);
@@ -122,7 +140,12 @@ export default function JobTracker() {
   };
 
   const handleToggleApplied = async (job: Job) => {
-    const currentlyApplied = appliedJobs.has(job.id);
+    // Check both by job_id and by application_url
+    const appliedById = appliedJobs.has(job.id);
+    const appliedByUrl = job.applicationUrl && job.applicationUrl.trim() !== '' 
+      ? appliedJobs.has(`url:${job.applicationUrl.trim()}`) 
+      : false;
+    const currentlyApplied = appliedById || appliedByUrl;
     
     // Optimistic update
     const newAppliedJobs = new Map(appliedJobs);
@@ -154,15 +177,28 @@ export default function JobTracker() {
   };
 
   const handleToggleNotSuitable = async (job: Job) => {
-    const currentlyNotSuitable = notSuitableJobs.has(job.id);
+    // Check both by job_id and by application_url
+    const notSuitableById = notSuitableJobs.has(job.id);
+    const notSuitableByUrl = job.applicationUrl && job.applicationUrl.trim() !== '' 
+      ? notSuitableJobs.has(`url:${job.applicationUrl.trim()}`) 
+      : false;
+    const currentlyNotSuitable = notSuitableById || notSuitableByUrl;
     
     // Optimistic update
     const newNotSuitableJobs = new Set(notSuitableJobs);
     if (currentlyNotSuitable) {
+      // Remove both job_id and application_url entries
       newNotSuitableJobs.delete(job.id);
+      if (job.applicationUrl && job.applicationUrl.trim() !== '') {
+        newNotSuitableJobs.delete(`url:${job.applicationUrl.trim()}`);
+      }
       setNotSuitableCount(prev => Math.max(0, prev - 1));
     } else {
+      // Add both job_id and application_url entries
       newNotSuitableJobs.add(job.id);
+      if (job.applicationUrl && job.applicationUrl.trim() !== '') {
+        newNotSuitableJobs.add(`url:${job.applicationUrl.trim()}`);
+      }
       setNotSuitableCount(prev => prev + 1);
     }
     
@@ -212,8 +248,8 @@ export default function JobTracker() {
       // Hide applied jobs from main list
       if (job.applied) return false;
       
-      // Show/hide not suitable jobs based on toggle
-      if (!showNotSuitable && job.notSuitable) return false;
+      // Always hide not suitable jobs from main list
+      if (job.notSuitable) return false;
       
       const matchesSearch = 
         job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -224,7 +260,7 @@ export default function JobTracker() {
       
       return matchesSearch && matchesCategory;
     });
-  }, [jobs, searchTerm, categoryFilter, showNotSuitable]);
+  }, [jobs, searchTerm, categoryFilter]);
 
   // Paginated jobs
   const paginatedJobs = useMemo(() => {
@@ -238,7 +274,7 @@ export default function JobTracker() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, showNotSuitable]);
+  }, [searchTerm, categoryFilter]);
 
   const categories = useMemo(() => {
     const cats = new Set(jobs.map(job => job.category));
@@ -390,19 +426,6 @@ export default function JobTracker() {
                   <Download className="w-4 h-4" />
                 </Button>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="show-not-suitable"
-                checked={showNotSuitable}
-                onCheckedChange={(checked) => setShowNotSuitable(checked as boolean)}
-              />
-              <label 
-                htmlFor="show-not-suitable" 
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                Show jobs marked as not suitable ({notSuitableCount})
-              </label>
             </div>
           </div>
         </CardContent>
